@@ -1,4 +1,4 @@
-name: OIDC role, Init, fmt, Validate, Plan, Apply  & Manual EC2 Deploy
+name: OIDC role, Init, fmt, Validate, TfLint, Plan, Apply  & Manual EC2 Deploy
 
 on:
   workflow_dispatch:  # Enables manual trigger from GitHub UI
@@ -32,6 +32,17 @@ jobs:
 
       - name: Terraform Validate
         run: terraform validate
+
+      - name: Install TFLint
+        run: |
+          wget https://github.com/terraform-linters/tflint/releases/download/v0.50.2/tflint_linux_amd64.zip
+          unzip tflint_linux_amd64.zip
+          sudo mv tflint /usr/local/bin/
+          tflint --version
+
+      - name: Run TFLint
+        run: tflint --init && tflint -f compact
+        working-directory: ./
         
       - name: Terraform Plan
         run: terraform plan

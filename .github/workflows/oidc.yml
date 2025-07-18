@@ -1,4 +1,4 @@
-name: OIDC role Manual EC2 Deploy
+name: OIDC role, Init, fmt, Validate, Plan, Apply  & Manual EC2 Deploy
 
 on:
   workflow_dispatch:  # Enables manual trigger from GitHub UI
@@ -32,6 +32,9 @@ jobs:
 
       - name: Terraform Validate
         run: terraform validate
+        
+      - name: Terraform Plan
+        run: terraform plan
 
       - name: Terraform Apply
         run: terraform apply -auto-approve

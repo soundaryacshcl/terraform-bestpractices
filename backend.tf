@@ -1,6 +1,6 @@
  terraform {
   backend "s3" {
-    bucket       = "devops-lambda-tfstate"
+    bucket       = "terraform-bestpractices"
     key          = "terraform.tfstate"
     region       = "us-east-1"
     encrypt      = true

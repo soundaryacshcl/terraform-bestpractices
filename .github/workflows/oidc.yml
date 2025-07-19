@@ -49,18 +49,18 @@ jobs:
           terraform_wrapper: false   # keep native CLI output
 
       # ── (Optional) provider plugin cache ─────────────────────────────────
-      # - name: Prepare plugin cache dir
-      #   run: |
-      #     mkdir -p ~/.terraform.d/plugin-cache
-      #     echo 'plugin_cache_dir = "$HOME/.terraform.d/plugin-cache"' > ~/.terraformrc
+      - name: Prepare plugin cache dir
+        run: |
+          mkdir -p ~/.terraform.d/plugin-cache
+          echo 'plugin_cache_dir = "$HOME/.terraform.d/plugin-cache"' > ~/.terraformrc
 
-      # - name: Cache provider plugins
-      #   uses: actions/cache@v4
-      #   with:
-      #     path: ~/.terraform.d/plugin-cache
-      #     key: ${{ runner.os }}-terraform-${{ hashFiles('**/.terraform.lock.hcl') }}
-      #     restore-keys: |
-      #       ${{ runner.os }}-terraform-
+      - name: Cache provider plugins
+        uses: actions/cache@v4
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: ${{ runner.os }}-terraform-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
 
       # ── Terraform workflow steps ─────────────────────────────────────────
       - name: Init

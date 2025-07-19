@@ -5,7 +5,7 @@ run "default" {
   variables = {
     aws_region    = "us-east-1"
     ami_id        = "ami-020cba7c55df1f615"
-    instance_type = "t3.micro"
+    instance_type = "t2.micro"
   }
 
   assert {

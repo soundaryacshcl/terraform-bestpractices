@@ -1,3 +1,4 @@
+# .github/workflows/terraform.yml
 name: Terraform CI/CD
 
 on:
@@ -9,17 +10,20 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write          # OIDC to assume AWS role
   contents: read
+  id-token: write          # needed for AWS OIDC
   pull-requests: write     # allow reviewdog to add PR comments
 
-concurrency:               # prevent overlapping runs on the same ref
+concurrency:               # avoid overlapping runs on same ref
   group: terraform-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  TF_WORKING_DIR: .        # root of your repo
+  TF_WORKING_DIR: .        # repo root; adjust if you move code
 
+###############################################################################
+# ── 1. PLAN JOB ──────────────────────────────────────────────────────────────
+###############################################################################
 jobs:
   plan:
     runs-on: ubuntu-latest
@@ -29,94 +33,101 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
 
     steps:
-    # ───────── SCM ────────────────────────────────────────────────────
-    - name: Checkout code
-      uses: actions/checkout@v4
+      # ── SCM ───────────────────────────────────────────────────────────────
+      - uses: actions/checkout@v4
 
-    # ───────── AWS creds via OIDC ─────────────────────────────────────
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        role-to-assume: arn:aws:iam::590183969845:role/github-assume-role
-        aws-region: us-east-1
+      # ── AWS creds via OIDC ───────────────────────────────────────────────
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::590183969845:role/github-assume-role
+          aws-region: us-east-1
 
-    # ───────── Terraform CLI ─────────────────────────────────────────
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
-      with:
-        terraform_version: 1.7.5
-        terraform_wrapper: false   # keep native CLI output
+      # ── Terraform CLI ────────────────────────────────────────────────────
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+          terraform_wrapper: false   # keep native CLI output
 
-    # ───────── (Optional) cache provider plugins ─────────────────────
-    - name: Prepare plugin cache dir
-      run: |
-        mkdir -p ~/.terraform.d/plugin-cache
-        echo 'plugin_cache_dir = "$HOME/.terraform.d/plugin-cache"' > ~/.terraformrc
+      # ── (Optional) provider plugin cache ─────────────────────────────────
+      - name: Prepare plugin cache dir
+        run: |
+          mkdir -p ~/.terraform.d/plugin-cache
+          echo 'plugin_cache_dir = "$HOME/.terraform.d/plugin-cache"' > ~/.terraformrc
 
-    - name: Cache Terraform provider plugins
-      uses: actions/cache@v4
-      with:
-        path: ~/.terraform.d/plugin-cache
-        key: ${{ runner.os }}-terraform-${{ hashFiles('**/.terraform.lock.hcl') }}
-        restore-keys: |
-          ${{ runner.os }}-terraform-
+      - name: Cache provider plugins
+        uses: actions/cache@v4
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: ${{ runner.os }}-terraform-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
 
-    # ───────── Terraform workflow steps ──────────────────────────────
-    - name: Terraform Init
-      run: terraform init -input=false
+      # ── Terraform workflow steps ─────────────────────────────────────────
+      - name: Init
+        run: terraform init -input=false
 
-    - name: Terraform Format (check only)
-      run: terraform fmt -recursive
+      - name: Format (check only)
+        run: terraform fmt -check -diff -recursive
 
-    - name: Terraform Validate
-      run: terraform validate
+      - name: Validate
+        run: terraform validate
 
-    # ───────── TFLint with PR annotations ────────────────────────────
-    - name: TFLint
-      uses: reviewdog/action-tflint@v1
-      with:
-        reporter: github-pr-review
-        working-directory: ${{ env.TF_WORKING_DIR }}
+      # ── TFLint with PR annotations ───────────────────────────────────────
+      - name: TFLint
+        uses: reviewdog/action-tflint@v1
+        with:
+          reporter: github-pr-review
+          working-directory: ${{ env.TF_WORKING_DIR }}
 
-    - name: Terraform Plan
-      run: terraform plan -no-color -out=tfplan
+      - name: Plan
+        run: terraform plan -no-color -out=tfplan
 
-    - name: Upload plan artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: tfplan
-        path: ${{ env.TF_WORKING_DIR }}/tfplan
+      # ── Upload both plan and lock file ───────────────────────────────────
+      - name: Upload plan & lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: tf-artifacts
+          path: |
+            ${{ env.TF_WORKING_DIR }}/tfplan
+            ${{ env.TF_WORKING_DIR }}/.terraform.lock.hcl
 
+###############################################################################
+# ── 2. APPLY JOB (gated by Environment) ─────────────────────────────────────
+###############################################################################
   apply:
     needs: plan
     runs-on: ubuntu-latest
-    environment: prod            # require manual approval in repo settings
+    environment: prod          # require manual approval in repo settings
     defaults:
       run:
         shell: bash
         working-directory: ${{ env.TF_WORKING_DIR }}
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Download plan artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: tfplan
-        path: ${{ env.TF_WORKING_DIR }}
+      - name: Download plan & lockfile
+        uses: actions/download-artifact@v4
+        with:
+          name: tf-artifacts
+          path: ${{ env.TF_WORKING_DIR }}
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        role-to-assume: arn:aws:iam::590183969845:role/github-assume-role
-        aws-region: us-east-1
+      # ── AWS creds via OIDC ───────────────────────────────────────────────
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::590183969845:role/github-assume-role
+          aws-region: us-east-1
 
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
-      with:
-        terraform_version: 1.7.5
-        terraform_wrapper: false
+      # ── Terraform CLI ────────────────────────────────────────────────────
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+          terraform_wrapper: false
 
-    - name: Apply approved plan
-      run: terraform apply -auto-approve -no-color tfplan
+      # ── Read‑only init to verify lockfile consistency ────────────────────
+      - name: Init (lockfile read‑only)
+        run: terraform init -input=false -lockfile=readonly
+
+      # ── Apply the reviewed plan ──────────────────────────────────────────
+      - name: Apply approved plan
+        run: terraform apply -auto-approve -no-color tfplan

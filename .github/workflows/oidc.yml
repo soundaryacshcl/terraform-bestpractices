@@ -18,7 +18,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  TF_WORKING_DIR: infra         # single place to tweak later
+  TF_WORKING_DIR: .
+       # single place to tweak later
 
 jobs:
   plan:
